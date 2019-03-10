@@ -49,9 +49,20 @@ public class EmailController {
         return code;
     }
 
+    @GetMapping(value = "/saveTokenCalendar", params = "code")
+    public String saveTokenCalendar(@RequestParam(value = "code") String code) throws Exception {
+        System.out.println(code + " received");
+        emailServiceAPI.createEvent(code);
+        return code;
+    }
+
     @GetMapping(value = "/readEmail")
     public void readEmail(@RequestParam(value = "token") String token) {
         emailServiceAPI.readMail(token);
     }
 
+    @GetMapping(value = "/createEvent")
+    public RedirectView createEvent() throws Exception {
+        return new RedirectView(emailServiceAPI.authorizeCalendar());
+    }
 }

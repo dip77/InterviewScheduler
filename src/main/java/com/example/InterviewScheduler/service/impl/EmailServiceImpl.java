@@ -13,6 +13,12 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.util.DateTime;
+import com.google.api.services.calendar.Calendar;
+import com.google.api.services.calendar.CalendarScopes;
+import com.google.api.services.calendar.model.Event;
+import com.google.api.services.calendar.model.EventAttendee;
+import com.google.api.services.calendar.model.EventDateTime;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.ListMessagesResponse;
 import com.google.api.services.gmail.model.Message;
@@ -24,7 +30,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 
 @Service
 public class EmailServiceImpl implements EmailServiceAPI {
@@ -35,11 +44,20 @@ public class EmailServiceImpl implements EmailServiceAPI {
     @Value("${gmail.client.redirectUri}")
     private String redirectUri;
 
+    @Value("${calendar.client.redirectUri}")
+    private String redirectUriCalendar;
+
     @Value("${gmail.client.clientId}")
     private String clientId;
 
     @Value("${gmail.client.clientSecret}")
     private String clientSecret;
+
+    @Value("${calendar.client.clientId}")
+    private String clientIdCalendar;
+
+    @Value("${calendar.client.clientSecret}")
+    private String clientSecretCalendar;
 
 
     private static final String APPLICATION_NAME = "InterviewScheduler";
@@ -59,10 +77,24 @@ public class EmailServiceImpl implements EmailServiceAPI {
         clientSecrets = new GoogleClientSecrets().setWeb(web);
         httpTransport = GoogleNetHttpTransport.newTrustedTransport();
         flow = new GoogleAuthorizationCodeFlow.Builder(httpTransport, JSON_FACTORY, clientSecrets,
-                Collections.singleton(GmailScopes.GMAIL_READONLY)).build();
+                Arrays.asList(GmailScopes.GMAIL_READONLY, CalendarScopes.CALENDAR_EVENTS)).build();
         authorizationUrl = flow.newAuthorizationUrl().setRedirectUri(redirectUri);
         return authorizationUrl.build();
     }
+
+    public String authorizeCalendar() throws Exception {
+        AuthorizationCodeRequestUrl authorizationUrl;
+        GoogleClientSecrets.Details web = new GoogleClientSecrets.Details();
+        web.setClientId(clientIdCalendar);
+        web.setClientSecret(clientSecretCalendar);
+        clientSecrets = new GoogleClientSecrets().setWeb(web);
+        httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+        flow = new GoogleAuthorizationCodeFlow.Builder(httpTransport, JSON_FACTORY, clientSecrets,
+                Collections.singleton(CalendarScopes.CALENDAR_EVENTS)).build();
+        authorizationUrl = flow.newAuthorizationUrl().setRedirectUri(redirectUriCalendar);
+        return authorizationUrl.build();
+    }
+
 
     public void readMail(String token) {
         JSONObject json = new JSONObject();
@@ -96,7 +128,7 @@ public class EmailServiceImpl implements EmailServiceAPI {
                     System.out.println(lastSLot + " removed");
                 }
                 //todo calling invitation API if accept
-
+                createEvent(intentResponse.getDates().get(0));
             }
         } catch (Exception e) {
             System.out.println("failed");
@@ -104,5 +136,48 @@ public class EmailServiceImpl implements EmailServiceAPI {
         }
 
     }
+
+    public void createEvent(String dateTime) throws Exception {
+        System.out.println("creating event on " + dateTime);
+        Calendar service = new Calendar.Builder(httpTransport, JSON_FACTORY, credential)
+                .setApplicationName("applicationName").build();
+        Event event = new Event()
+                .setSummary("Interview With Coviam Technology")
+                .setLocation("1076, 24th Main, 11th Cross, HSR Layout, Bengaluru, Karnataka 560102")
+                .setDescription("First Round for the post of Software Engineer");
+        DateTime startDateTime = new DateTime(dateTime + ".000+05:30");
+        System.out.println(startDateTime);
+        EventDateTime start = new EventDateTime()
+                .setDateTime(startDateTime);
+        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        calendar.setTimeInMillis(startDateTime.getValue());
+        calendar.add(java.util.Calendar.HOUR, 1);
+        event.setStart(start);
+        DateTime endDateTime = new DateTime(calendar.getTime());
+        System.out.println(endDateTime);
+        EventDateTime end = new EventDateTime()
+                .setDateTime(endDateTime);
+        event.setEnd(end);
+        EventAttendee[] attendees = new EventAttendee[]{
+                new EventAttendee().setEmail("dip.halani@coviam.com"),
+                new EventAttendee().setEmail("nilay.shrivastava@coviam.com")
+        };
+        event.setAttendees(Arrays.asList(attendees));
+        String calendarId = "primary";
+        event = service.events().insert(calendarId, event).execute();
+        System.out.printf("Event created: %s\n", event.getHtmlLink());
+
+
+    }
+
+    public static void main(String[] args) {
+        DateTime startDateTime = new DateTime("2019-02-04T03:30:00.000+05:30");
+
+        //     DateTime startDateTime = new DateTime("2015-05-28T09:00:00-07:00");
+        //2015-05-28T09:00:00-07:00
+        System.out.println(startDateTime);
+
+    }
+
 
 }
